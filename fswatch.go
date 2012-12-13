@@ -9,7 +9,7 @@ const (
 	CREATED
 	DELETED
 	MODIFIED
-        PERM
+	PERM
 	NOEXIST
 	NOPERM
 	INVALID
@@ -26,5 +26,3 @@ func init() {
 	}
 	watch_delay = del
 }
-
-

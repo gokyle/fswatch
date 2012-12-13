@@ -1,8 +1,8 @@
 package fswatch
 
 import (
-        "fmt"
-        "os"
+	"fmt"
+	"os"
 )
 
 type watchItem struct {
@@ -32,9 +32,9 @@ func watchPath(path string) (wi *watchItem) {
 func (wi *watchItem) Update() bool {
 	fi, err := os.Stat(wi.Path)
 	if err != nil {
-                if !os.IsNotExist(err) {
-                        fmt.Printf("[-] stat err: %+v\n", err)
-                }
+		if !os.IsNotExist(err) {
+			fmt.Printf("[-] stat err: %+v\n", err)
+		}
 		if os.IsNotExist(err) {
 			if wi.LastEvent == NOEXIST {
 				return false
@@ -46,12 +46,12 @@ func (wi *watchItem) Update() bool {
 				return true
 			}
 		} else if os.IsPermission(err) {
-                        fmt.Println("[-] perm event")
+			fmt.Println("[-] perm event")
 			if wi.LastEvent == NOPERM {
-                                fmt.Println("[-] already know about bad perms")
+				fmt.Println("[-] already know about bad perms")
 				return false
 			} else {
-                                fmt.Println("[-] perms were changed")
+				fmt.Println("[-] perms were changed")
 				wi.LastEvent = NOPERM
 				return true
 			}
@@ -61,24 +61,24 @@ func (wi *watchItem) Update() bool {
 		}
 	}
 
-        if wi.LastEvent == NOEXIST {
-                wi.LastEvent = CREATED
-                wi.StatInfo = fi
-                return true
-        } else if fi.ModTime().After(wi.StatInfo.ModTime()) {
-                wi.StatInfo = fi
+	if wi.LastEvent == NOEXIST {
+		wi.LastEvent = CREATED
+		wi.StatInfo = fi
+		return true
+	} else if fi.ModTime().After(wi.StatInfo.ModTime()) {
+		wi.StatInfo = fi
 		switch wi.LastEvent {
 		case NONE, CREATED, NOPERM, INVALID:
 			wi.LastEvent = MODIFIED
 		case DELETED, NOEXIST:
 			wi.LastEvent = CREATED
 		}
-                return true
+		return true
 	} else if fi.Mode() != wi.StatInfo.Mode() {
-                wi.LastEvent = PERM
-                wi.StatInfo = fi
-                return true
-        }
+		wi.LastEvent = PERM
+		wi.StatInfo = fi
+		return true
+	}
 	return false
 }
 
@@ -90,5 +90,3 @@ type Notification struct {
 func (wi *watchItem) Notification() *Notification {
 	return &Notification{wi.Path, wi.LastEvent}
 }
-
-

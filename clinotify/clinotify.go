@@ -1,22 +1,34 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"github.com/gokyle/fswatch"
 	"os"
 	"time"
 )
 
+var dur time.Duration
+
 func init() {
 	if len(os.Args) == 1 {
 		fmt.Println("[+] not watching anything, exiting.")
 		os.Exit(1)
 	}
+	dur, _ = time.ParseDuration("5s")
 }
 
 func main() {
-	paths := os.Args[1:]
-	w := fswatch.Watch(paths...)
+	var w *fswatch.Watcher
+
+	auto_watch := flag.Bool("a", false, "auto add new files in directories")
+	flag.Parse()
+	paths := flag.Args()
+	if *auto_watch {
+		w = fswatch.NewAutoWatcher(paths...)
+	} else {
+		w = fswatch.NewWatcher(paths...)
+	}
 	fmt.Println("listening...")
 
 	l := w.Start()
@@ -44,6 +56,12 @@ func main() {
 				status_text = "is invalid"
 			}
 			fmt.Printf("[+] %s %s\n", n.Path, status_text)
+		}
+	}()
+	go func() {
+		for {
+			<-time.After(dur)
+			fmt.Printf("[-] watching: %+v\n", w.Watching())
 		}
 	}()
 	time.Sleep(60 * time.Second)
