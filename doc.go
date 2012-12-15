@@ -29,5 +29,15 @@ The Start() method returns a read-only channel that receives Notification
 values. The Stop() method closes the channel, and no files will be watched
 from that point.
 
+The list of files being watched may be retrieved with the Watch() method and
+the current state of the files being watched may be retrieved with the
+State() method. See the go docs for more information.
+
+In synchronous mode (i.e. Watchers obtained from NewWatcher()), deleted files
+will not be removed from the watch list, allowing the user to watch for files
+that might be created at a future time, or to allow notification of files that
+are deleted and then recreated. The auto-watching mode (i.e. from
+NewAutoWatcher()) will remove deleted files from the watch list, as it
+automatically adds new files to the watch list.
 */
 package fswatch
