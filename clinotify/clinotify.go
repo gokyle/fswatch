@@ -1,3 +1,6 @@
+// clinotify provides an example file system watching command line app. It
+// scans the file system, and every 15 seconds prints out the files being
+// watched and their current state.
 package main
 
 import (
@@ -15,7 +18,7 @@ func init() {
 		fmt.Println("[+] not watching anything, exiting.")
 		os.Exit(1)
 	}
-	dur, _ = time.ParseDuration("5s")
+	dur, _ = time.ParseDuration("15s")
 }
 
 func main() {
@@ -29,7 +32,7 @@ func main() {
 	} else {
 		w = fswatch.NewWatcher(paths...)
 	}
-	fmt.Println("listening...")
+	fmt.Println("[+] listening...")
 
 	l := w.Start()
 	go func() {
@@ -61,7 +64,11 @@ func main() {
 	go func() {
 		for {
 			<-time.After(dur)
-			fmt.Printf("[-] watching: %+v\n", w.Watching())
+			if !w.Active() {
+				fmt.Println("[!] not watching anything")
+				os.Exit(1)
+			}
+			fmt.Printf("[-] watching: %+v\n", w.State())
 		}
 	}()
 	time.Sleep(60 * time.Second)

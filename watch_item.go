@@ -1,9 +1,6 @@
 package fswatch
 
-import (
-	"fmt"
-	"os"
-)
+import "os"
 
 type watchItem struct {
 	Path      string
@@ -32,9 +29,6 @@ func watchPath(path string) (wi *watchItem) {
 func (wi *watchItem) Update() bool {
 	fi, err := os.Stat(wi.Path)
 	if err != nil {
-		if !os.IsNotExist(err) {
-			fmt.Printf("[-] stat err: %+v\n", err)
-		}
 		if os.IsNotExist(err) {
 			if wi.LastEvent == NOEXIST {
 				return false
@@ -46,12 +40,9 @@ func (wi *watchItem) Update() bool {
 				return true
 			}
 		} else if os.IsPermission(err) {
-			fmt.Println("[-] perm event")
 			if wi.LastEvent == NOPERM {
-				fmt.Println("[-] already know about bad perms")
 				return false
 			} else {
-				fmt.Println("[-] perms were changed")
 				wi.LastEvent = NOPERM
 				return true
 			}
@@ -82,11 +73,15 @@ func (wi *watchItem) Update() bool {
 	return false
 }
 
+// Type Notification represents a file state change. The Path field indicates
+// the file that was changed, while last event corresponds to one of the
+// event type constants.
 type Notification struct {
 	Path  string
 	Event int
 }
 
+// Notification returns a notification from a watchItem.
 func (wi *watchItem) Notification() *Notification {
 	return &Notification{wi.Path, wi.LastEvent}
 }

@@ -1,7 +1,6 @@
 package fswatch
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -17,13 +16,20 @@ type Watcher struct {
 }
 
 // newWatcher is the internal function for properly setting up a new watcher.
-func newWatcher(dir_notify bool, paths ...string) (w *Watcher) {
+func newWatcher(dir_notify bool, initpaths ...string) (w *Watcher) {
 	w = new(Watcher)
 	w.auto_watch = dir_notify
 	w.paths = make(map[string]*watchItem, 0)
 
+	var paths []string
+	for _, path := range initpaths {
+		matches, err := filepath.Glob(path)
+		if err != nil {
+			continue
+		}
+		paths = append(paths, matches...)
+	}
 	if dir_notify {
-		fmt.Println("[-] calling syncAddPaths...")
 		w.syncAddPaths(paths...)
 	} else {
 		for _, path := range paths {
@@ -48,34 +54,6 @@ func NewAutoWatcher(paths ...string) *Watcher {
 	return newWatcher(true, paths...)
 }
 
-func (w *Watcher) watch(sndch chan<- *Notification) {
-	defer func() {
-		x := recover()
-		fmt.Printf("[+] recover: %+v\n", x)
-	}()
-	for {
-		<-time.After(watch_delay)
-		for _, wi := range w.paths {
-			if wi.Update() && w.shouldNotify(wi) {
-				sndch <- wi.Notification()
-			}
-		}
-	}
-}
-
-func (w *Watcher) shouldNotify(wi *watchItem) bool {
-	if w.auto_watch && wi.StatInfo.IsDir() {
-		go w.addPaths(wi)
-		return false
-	}
-	return true
-}
-
-func (w *Watcher) addPaths(wi *watchItem) {
-	walker := getWalker(w, wi.Path, w.add_chan)
-	go filepath.Walk(wi.Path, walker)
-}
-
 // Start begins watching the files, sending notifications when files change.
 // It returns a channel that notifications are sent on.
 func (w *Watcher) Start() <-chan *Notification {
@@ -96,27 +74,75 @@ func (w *Watcher) Stop() {
 	if w.notify_chan != nil {
 		close(w.notify_chan)
 	}
-	if w.paths != nil {
-		for p, _ := range w.paths {
-			delete(w.paths, p)
+
+	if w.add_chan != nil {
+		close(w.add_chan)
+	}
+}
+
+// Returns true if the Watcher is actively looking for changes.
+func (w *Watcher) Active() bool {
+	return w.paths != nil && len(w.paths) > 0
+}
+
+// The Add method takes a variable number of string arguments and adds those
+// files to the watch list, returning the number of files added.
+func (w *Watcher) Add(inpaths ...string) (n int) {
+	var paths []string
+	for _, path := range initpaths {
+		matches, err := filepath.Glob(path)
+		if err != nil {
+			continue
+		}
+		paths = append(paths, matches...)
+	}
+	if dir_notify && w.notify_chan != nil {
+		w.addPaths(paths...)
+	} else if dir_notify {
+		w.syncAddPaths(paths...)
+	} else {
+		for _, path := range paths {
+			w.paths[path] = watchPath(path)
+		}
+	}
+
+}
+
+// goroutine that cycles through the list of paths and checks for updates.
+func (w *Watcher) watch(sndch chan<- *Notification) {
+	defer func() {
+		recover()
+	}()
+	for {
+		<-time.After(WatchDelay)
+		for _, wi := range w.paths {
+			if wi.Update() && w.shouldNotify(wi) {
+				sndch <- wi.Notification()
+			}
+
+			if wi.LastEvent == NOEXIST && w.auto_watch {
+				delete(w.paths, wi.Path)
+			}
+
+			if len(w.paths) == 0 {
+				w.Stop()
+			}
 		}
 	}
 }
 
-func (w *Watcher) syncAddPaths(paths ...string) {
-	fmt.Println("[-] syncAddPaths")
-	for _, path := range paths {
-		wi := watchPath(path)
-		if wi == nil {
-			continue
-		} else if _, watching := w.paths[wi.Path]; watching {
-			continue
-		}
-		w.paths[wi.Path] = wi
-		if wi.StatInfo.IsDir() {
-			w.syncAddDir(wi)
-		}
+func (w *Watcher) shouldNotify(wi *watchItem) bool {
+	if w.auto_watch && wi.StatInfo.IsDir() &&
+		!(wi.LastEvent == DELETED || wi.LastEvent == NOEXIST) {
+		go w.addPaths(wi)
+		return false
 	}
+	return true
+}
+
+func (w *Watcher) addPaths(wi *watchItem) {
+	walker := getWalker(w, wi.Path, w.add_chan)
+	go filepath.Walk(wi.Path, walker)
 }
 
 func (w *Watcher) watchItemListener() {
@@ -159,6 +185,23 @@ func getWalker(w *Watcher, root string, addch chan<- *watchItem) func(string, os
 	return walker
 }
 
+func (w *Watcher) syncAddPaths(paths ...string) {
+	for _, path := range paths {
+		wi := watchPath(path)
+		if wi == nil {
+			continue
+		} else if wi.LastEvent == NOEXIST {
+			continue
+		} else if _, watching := w.paths[wi.Path]; watching {
+			continue
+		}
+		w.paths[wi.Path] = wi
+		if wi.StatInfo.IsDir() {
+			w.syncAddDir(wi)
+		}
+	}
+}
+
 func (w *Watcher) syncAddDir(wi *watchItem) {
 	walker := func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -169,7 +212,6 @@ func (w *Watcher) syncAddDir(wi *watchItem) {
 		}
 		new_wi := watchPath(path)
 		if new_wi != nil {
-			fmt.Println("[sync] add ", wi.Path)
 			w.paths[path] = new_wi
 			if !new_wi.StatInfo.IsDir() {
 				return nil
@@ -183,10 +225,24 @@ func (w *Watcher) syncAddDir(wi *watchItem) {
 	filepath.Walk(wi.Path, walker)
 }
 
+// Watching returns a list of the files being watched.
 func (w *Watcher) Watching() (paths []string) {
 	paths = make([]string, 0)
 	for path, _ := range w.paths {
 		paths = append(paths, path)
+	}
+	return
+}
+
+// State returns a slice of Notifications representing the files being watched
+// and their last event.
+func (w *Watcher) State() (state []Notification) {
+	state = make([]Notification, 0)
+	if w.paths == nil {
+		return
+	}
+	for _, wi := range w.paths {
+		state = append(state, *wi.Notification())
 	}
 	return
 }
