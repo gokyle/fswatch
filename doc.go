@@ -39,5 +39,11 @@ that might be created at a future time, or to allow notification of files that
 are deleted and then recreated. The auto-watching mode (i.e. from
 NewAutoWatcher()) will remove deleted files from the watch list, as it
 automatically adds new files to the watch list.
+
+If "." is not specified explicitly in the list of files to watch, new
+directories created in the current directory will not be seen (as per the
+behaviour of filepath.Match); any directories being watched will, however.
+If you wish to watch for changes in the current directory, be sure to specify
+".".
 */
 package fswatch

@@ -87,25 +87,27 @@ func (w *Watcher) Active() bool {
 
 // The Add method takes a variable number of string arguments and adds those
 // files to the watch list, returning the number of files added.
-func (w *Watcher) Add(inpaths ...string) (n int) {
+func (w *Watcher) Add(inpaths ...string) {
 	var paths []string
-	for _, path := range initpaths {
+	for _, path := range inpaths {
 		matches, err := filepath.Glob(path)
 		if err != nil {
 			continue
 		}
 		paths = append(paths, matches...)
 	}
-	if dir_notify && w.notify_chan != nil {
-		w.addPaths(paths...)
-	} else if dir_notify {
+	if w.auto_watch && w.notify_chan != nil {
+		for _, path := range paths {
+			wi := watchPath(path)
+			w.addPaths(wi)
+		}
+	} else if w.auto_watch {
 		w.syncAddPaths(paths...)
 	} else {
 		for _, path := range paths {
 			w.paths[path] = watchPath(path)
 		}
 	}
-
 }
 
 // goroutine that cycles through the list of paths and checks for updates.
