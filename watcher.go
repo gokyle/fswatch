@@ -171,7 +171,7 @@ func getWalker(w *Watcher, root string, addch chan<- *watchItem) func(string, os
 			return nil
 		}
 		wi := watchPath(path)
-		if wi == nil {
+		if wi == nil || wi.StatInfo == nil {
 			return nil
 		} else if _, watching := w.paths[wi.Path]; !watching {
 			wi.LastEvent = CREATED
